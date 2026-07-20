@@ -1,0 +1,8 @@
+googlemaps
+folium
+polyline
+networkx
+geopy
+matplotlib
+fastapi
+uvicorn[standard]
