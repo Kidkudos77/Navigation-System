@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftRoute Delivery - Navigation System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAdtNNkPvxgW9nlWiv-EnLUSzyrzaguD70&libraries=geometry"></script>
+    <style>
+        /* Original CSS from globals.css */
+        :root {
+            --font-size: 16px;
+            --background: #ffffff;
+            --foreground: #030213;
+            --card: #ffffff;
+            --card-foreground: #030213;
+            --primary: #030213;
+            --primary-foreground: #ffffff;
+            --secondary: #f5f5f7;
+            --secondary-foreground: #030213;
+            --muted: #ececf0;
+            --muted-foreground: #717182;
+            --accent: #e9ebef;
+            --accent-foreground: #030213;
+            --destructive: #d4183d;
+            --destructive-foreground: #ffffff;
+            --border: rgba(0, 0, 0, 0.1);
+            --input: transparent;
+            --input-background: #f3f3f5;
+            --radius: 0.625rem;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: var(--font-size);
+            background: var(--background);
+            color: var(--foreground);
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Button Styles */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+            outline: none;
+        }
+
+        .btn:disabled {
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        .btn-default {
+            background: var(--primary);
+            color: var(--primary-foreground);
+        }
+
+        .btn-default:hover {
+            background: #050525;
+        }
+
+        .btn-outline {
+            border: 1px solid var(--border);
+            background: var(--background);
+            color: var(--foreground);
+        }
+
+        .btn-outline:hover {
+            background: var(--accent);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--foreground);
+        }
+
+        .btn-ghost:hover {
+            background: var(--accent);
+        }
+
+        .btn-lg {
+            padding: 0.75rem 1.5rem;
+            height: 3rem;
+        }
+
+        .btn-md {
+            padding: 0.5rem 1rem;
+            height: 2.25rem;
+        }
+
+        /* Card Styles */
+        .card {
+            background: var(--card);
+            color: var(--card-foreground);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            padding: 1.5rem 1.5rem 0 1.5rem;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            line-height: 1.2;
+            margin: 0;
+        }
+
+        .card-description {
+            color: var(--muted-foreground);
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+        }
+
+        /* Input Styles */
+        .input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 0.375rem;
+            background: var(--input-background);
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input:focus {
+            border-color: #2563eb;
+            ring: 2px;
+            ring-color: #2563eb;
+        }
+
+        .label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        /* Badge Styles */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border-radius: 0.375rem;
+            background: var(--muted);
+            color: var(--muted-foreground);
+        }
+
+        /* Icon Styles */
+        .icon {
+            width: 1rem;
+            height: 1rem;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        // Application State
+        let appState = {
+            currentView: 'menu',
+            deliveries: [],
+            selectedDelivery: null
+        };
+
+        // API Base URL
+        const API_BASE = 'http://127.0.0.1:8000';
+
+        // Icon SVGs
+        const icons = {
+            Package: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
+            Building2: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12h4"/><path d="M6 16h4"/><path d="M10 12h4"/><path d="M10 16h4"/><path d="M6 20h12"/></svg>`,
+            List: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
+            Map: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>`,
+            ArrowLeft: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>`,
+            MapPin: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`,
+            Navigation: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>`,
+            User: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+            Truck: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.28a1 1 0 0 0-.684-.948l-1.923-.641a1 1 0 0 1-.578-.502L17 11"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>`,
+            Route: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>`,
+            ExternalLink: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`,
+            Calendar: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`
+        };
+
+        // Render Functions
+        function render() {
+            const app = document.getElementById('app');
+            if (!app) return;
+
+            switch (appState.currentView) {
+                case 'menu':
+                    app.innerHTML = renderMenu();
+                    break;
+                case 'company-info':
+                    app.innerHTML = renderCompanyInfo();
+                    break;
+                case 'delivery-form':
+                    app.innerHTML = renderDeliveryForm();
+                    break;
+                case 'delivery-list':
+                    app.innerHTML = renderDeliveryList();
+                    break;
+                case 'map':
+                    app.innerHTML = renderMapView();
+                    setTimeout(() => drawMap(), 100);
+                    break;
+            }
+        }
+
+        function renderMenu() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+                    <div class="max-w-2xl w-full">
+                        <div class="text-center mb-12">
+                            <div class="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-full mb-6">
+                                ${icons.Package.replace('class="icon"', 'class="w-10 h-10 text-white"')}
+                            </div>
+                            <h1 class="text-4xl font-bold mb-2">SwiftRoute Delivery</h1>
+                            <p class="text-gray-600">Optimized Delivery Route Management System</p>
+                        </div>
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <button onclick="setView('company-info')" class="btn btn-outline btn-lg h-32 flex flex-col gap-3">
+                                ${icons.Building2.replace('class="icon"', 'class="w-8 h-8"')}
+                                <div>
+                                    <div>Company Info</div>
+                                    <div class="text-gray-500 text-sm">About our startup</div>
+                                </div>
+                            </button>
+
+                            <button onclick="setView('delivery-form')" class="btn btn-lg h-32 flex flex-col gap-3 bg-blue-600 hover:bg-blue-700 text-white">
+                                ${icons.Package.replace('class="icon"', 'class="w-8 h-8"')}
+                                <div>
+                                    <div>New Delivery</div>
+                                    <div class="text-blue-100 text-sm">Enter delivery details</div>
+                                </div>
+                            </button>
+
+                            <button onclick="setView('delivery-list')" class="btn btn-outline btn-lg h-32 flex flex-col gap-3" ${appState.deliveries.length === 0 ? 'disabled' : ''}>
+                                ${icons.List.replace('class="icon"', 'class="w-8 h-8"')}
+                                <div>
+                                    <div>Delivery Records</div>
+                                    <div class="text-gray-500 text-sm">${appState.deliveries.length} deliveries</div>
+                                </div>
+                            </button>
+
+                            <button onclick="viewLatestMap()" class="btn btn-outline btn-lg h-32 flex flex-col gap-3" ${appState.deliveries.length === 0 ? 'disabled' : ''}>
+                                ${icons.Map.replace('class="icon"', 'class="w-8 h-8"')}
+                                <div>
+                                    <div>View Map</div>
+                                    <div class="text-gray-500 text-sm">Latest route</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCompanyInfo() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 py-8">
+                    <div class="max-w-4xl mx-auto">
+                        <button onclick="setView('menu')" class="btn btn-ghost btn-md mb-6">
+                            ${icons.ArrowLeft} Back to Menu
+                        </button>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="flex items-center gap-4 mb-4">
+                                    <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
+                                        ${icons.Building2.replace('class="icon"', 'class="w-8 h-8 text-white"')}
+                                    </div>
+                                    <div>
+                                        <h3 class="card-title text-3xl">SwiftRoute Delivery</h3>
+                                        <p class="card-description text-lg">Optimized Delivery Route Management System</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-content space-y-6">
+                                <div>
+                                    <h3 class="text-xl font-semibold mb-3">About Us</h3>
+                                    <p class="text-gray-600 leading-relaxed">
+                                        SwiftRoute Delivery is a cutting-edge startup founded in 2025, focused on revolutionizing the delivery industry through
+                                        intelligent route optimization. We combine advanced algorithms with real-time traffic data to ensure
+                                        your packages reach their destination in the most efficient way possible.
+                                    </p>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-semibold mb-3">Our Team</h3>
+                                    <p class="text-gray-600 leading-relaxed">
+                                        We are proud to have a dedicated team of innovators driving our mission forward:
+                                    </p>
+                                    <ul class="list-disc list-inside text-gray-600 space-y-2 mt-2">
+                                        <li>Alissa Forde</li>
+                                        <li>Javonte Carter</li>
+                                    </ul>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-semibold mb-3">Our Mission</h3>
+                                    <p class="text-gray-600 leading-relaxed">
+                                        To make delivery logistics smarter, faster, and more sustainable. We believe that every package deserves
+                                        the most efficient route, reducing delivery times, fuel consumption, and environmental impact.
+                                    </p>
+                                </div>
+                                <div>
+                                    <h3 class="text-xl font-semibold mb-3">Contact</h3>
+                                    <p class="text-gray-600">
+                                        Email: info@swiftroute.com<br>
+                                        Phone: (555) 123-4567<br>
+                                        Address: 123 Innovation Drive, Tech City, TC 12345
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDeliveryForm() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 py-8">
+                    <div class="max-w-2xl mx-auto">
+                        <button onclick="setView('menu')" class="btn btn-ghost btn-md mb-6">
+                            ${icons.ArrowLeft} Back to Menu
+                        </button>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title">New Delivery</h3>
+                                <p class="card-description">Enter delivery details to create a new route</p>
+                            </div>
+                            <div class="card-content">
+                                <form id="delivery-form" onsubmit="handleDeliverySubmit(event)" class="space-y-6">
+                                    <div class="space-y-2">
+                                        <label class="label" for="pickup">Pickup Location *</label>
+                                        <input class="input" id="pickup" type="text" placeholder="e.g., 123 Main St, City, State" required>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="label" for="delivery">Delivery Location *</label>
+                                        <input class="input" id="delivery" type="text" placeholder="e.g., 456 Oak Ave, City, State" required>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="label" for="client">Client Name *</label>
+                                        <input class="input" id="client" type="text" placeholder="Client's full name" required>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="label" for="driver">Driver Name *</label>
+                                        <input class="input" id="driver" type="text" placeholder="Driver's full name" required>
+                                    </div>
+                                    <div class="space-y-2">
+                                        <label class="label" for="distance">Distance (km)</label>
+                                        <input class="input" id="distance" type="number" step="0.01" placeholder="0.00">
+                                        <p class="text-sm text-gray-500">Leave empty to calculate automatically</p>
+                                    </div>
+                                    <div class="flex gap-4 pt-4">
+                                        <button type="button" onclick="setView('menu')" class="btn btn-outline btn-md flex-1">Cancel</button>
+                                        <button type="submit" class="btn btn-default btn-md flex-1">Create Delivery</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDeliveryList() {
+            if (appState.deliveries.length === 0) {
+                return `
+                    <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 py-8">
+                        <div class="max-w-4xl mx-auto">
+                            <button onclick="setView('menu')" class="btn btn-ghost btn-md mb-6">
+                                ${icons.ArrowLeft} Back to Menu
+                            </button>
+                            <div class="card">
+                                <div class="card-content text-center py-12">
+                                    <p class="text-gray-500 mb-4">No deliveries yet</p>
+                                    <button onclick="setView('menu')" class="btn btn-outline btn-md">Create Your First Delivery</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const deliveriesHtml = appState.deliveries.map(delivery => {
+                const date = new Date(delivery.timestamp).toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                return `
+                    <div class="card mb-4">
+                        <div class="card-content p-6">
+                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div class="flex-1 space-y-3">
+                                    <div class="flex items-start gap-2">
+                                        ${icons.MapPin.replace('class="icon"', 'class="w-4 h-4 text-green-600 mt-1 flex-shrink-0"')}
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm text-gray-600">Pickup</p>
+                                            <p class="font-medium break-words">${delivery.pickupLocation}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start gap-2">
+                                        ${icons.Navigation.replace('class="icon"', 'class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"')}
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm text-gray-600">Delivery</p>
+                                            <p class="font-medium break-words">${delivery.deliveryLocation}</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap gap-4 pt-2">
+                                        <div class="flex items-center gap-2">
+                                            ${icons.User.replace('class="icon"', 'class="w-4 h-4 text-blue-600"')}
+                                            <span class="text-sm text-gray-600">${delivery.clientName}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            ${icons.Truck.replace('class="icon"', 'class="w-4 h-4 text-blue-600"')}
+                                            <span class="text-sm text-gray-600">${delivery.driverName}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            ${icons.Calendar.replace('class="icon"', 'class="w-4 h-4 text-blue-600"')}
+                                            <span class="text-sm text-gray-600">${date}</span>
+                                        </div>
+                                    </div>
+                                    ${delivery.distance > 0 ? `<span class="badge">${delivery.distance.toFixed(2)} km</span>` : ''}
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="viewDeliveryMap(${appState.deliveries.indexOf(delivery)})" class="btn btn-outline btn-md">
+                                        ${icons.Map} View Map
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 py-8">
+                    <div class="max-w-4xl mx-auto">
+                        <button onclick="setView('menu')" class="btn btn-ghost btn-md mb-6">
+                            ${icons.ArrowLeft} Back to Menu
+                        </button>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3 class="card-title text-2xl">Delivery Records</h3>
+                                <p class="card-description">${appState.deliveries.length} ${appState.deliveries.length === 1 ? 'delivery' : 'deliveries'} total</p>
+                            </div>
+                            <div class="card-content">
+                                ${deliveriesHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMapView() {
+            if (!appState.selectedDelivery) {
+                return `
+                    <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 py-8 flex items-center justify-center">
+                        <div class="card max-w-md">
+                            <div class="card-content p-8 text-center">
+                                <p class="text-gray-600">No delivery selected</p>
+                                <button onclick="setView('menu')" class="btn btn-default btn-md mt-4">Back to Menu</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const delivery = appState.selectedDelivery;
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 py-8">
+                    <div class="max-w-6xl mx-auto">
+                        <button onclick="setView('menu')" class="btn btn-ghost btn-md mb-6">
+                            ${icons.ArrowLeft} Back to Menu
+                        </button>
+                        <div class="grid lg:grid-cols-3 gap-6">
+                            <div class="card lg:col-span-1">
+                                <div class="card-header">
+                                    <h3 class="card-title">Delivery Details</h3>
+                                    <p class="card-description">Route information</p>
+                                </div>
+                                <div class="card-content space-y-4">
+                                    <div class="space-y-3">
+                                        <div class="flex items-start gap-2">
+                                            ${icons.MapPin.replace('class="icon"', 'class="w-4 h-4 text-green-600 mt-1 flex-shrink-0"')}
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-gray-600 text-sm">Pickup</p>
+                                                <p class="break-words">${delivery.pickupLocation}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            ${icons.Navigation.replace('class="icon"', 'class="w-4 h-4 text-red-600 mt-1 flex-shrink-0"')}
+                                            <div class="flex-1 min-w-0">
+                                                <p class="text-gray-600 text-sm">Delivery</p>
+                                                <p class="break-words">${delivery.deliveryLocation}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="pt-4 border-t space-y-3">
+                                        <div class="flex items-center gap-2">
+                                            ${icons.User.replace('class="icon"', 'class="w-4 h-4 text-blue-600"')}
+                                            <div>
+                                                <p class="text-gray-600 text-sm">Client</p>
+                                                <p>${delivery.clientName}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            ${icons.Truck.replace('class="icon"', 'class="w-4 h-4 text-blue-600"')}
+                                            <div>
+                                                <p class="text-gray-600 text-sm">Driver</p>
+                                                <p>${delivery.driverName}</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            ${icons.Route.replace('class="icon"', 'class="w-4 h-4 text-blue-600"')}
+                                            <div>
+                                                <p class="text-gray-600 text-sm">Total Distance</p>
+                                                <p>${delivery.distance > 0 ? delivery.distance.toFixed(2) : '0.00'} km</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="pt-4">
+                                        <button onclick="openGoogleMaps()" class="btn btn-outline btn-md w-full">
+                                            ${icons.ExternalLink} Open in Google Maps
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card lg:col-span-2">
+                                <div class="card-header">
+                                    <h3 class="card-title">Optimal Route Map</h3>
+                                    <p class="card-description">Shortest path from pickup to delivery location</p>
+                                </div>
+                                <div class="card-content">
+                                    <div class="relative bg-white rounded-lg overflow-hidden border" style="height: 500px;">
+                                        <div id="map-container" style="width: 100%; height: 100%;"></div>
+                                        <div id="loading-overlay" class="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
+                                            <p class="text-gray-500">Calculating route...</p>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4 flex flex-wrap gap-4 items-center justify-center">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-4 h-4 bg-green-600 rounded-full"></div>
+                                            <span class="text-gray-600 text-sm">Pickup Location</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-4 h-4 bg-red-600 rounded-full"></div>
+                                            <span class="text-gray-600 text-sm">Delivery Location</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-1 bg-blue-600 rounded"></div>
+                                            <span class="text-gray-600 text-sm">Route Path</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Event Handlers
+        function setView(view) {
+            appState.currentView = view;
+            render();
+        }
+
+        async function handleDeliverySubmit(e) {
+            e.preventDefault();
+            const pickup = document.getElementById('pickup').value;
+            const delivery = document.getElementById('delivery').value;
+            const client = document.getElementById('client').value;
+            const driver = document.getElementById('driver').value;
+            const manualDistance = parseFloat(document.getElementById('distance').value);
+
+            if (!pickup || !delivery || !client || !driver) {
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            // Show loading state
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Calculating route...';
+
+            let distance = manualDistance || 0;
+
+            // Fetch route data to calculate distance
+            try {
+                const response = await fetch(`${API_BASE}/api/shortest-path`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origin: pickup,
+                        destination: delivery
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // Extract distance from the first route
+                    if (data.routes && data.routes.length > 0 && data.routes[0].distance_meters) {
+                        distance = (data.routes[0].distance_meters / 1000).toFixed(2); // Convert to km
+                    } else if (data.total_distance_m) {
+                        distance = (data.total_distance_m / 1000).toFixed(2);
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not fetch distance, using manual value or 0', err);
+            }
+
+            const newDelivery = {
+                id: Date.now().toString(),
+                pickupLocation: pickup,
+                deliveryLocation: delivery,
+                clientName: client,
+                driverName: driver,
+                distance: parseFloat(distance) || 0,
+                timestamp: new Date()
+            };
+
+            appState.deliveries.unshift(newDelivery);
+            appState.selectedDelivery = newDelivery;
+            
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+            setView('map');
+        }
+
+        function viewLatestMap() {
+            if (appState.deliveries.length > 0) {
+                appState.selectedDelivery = appState.deliveries[0];
+                setView('map'); // Use setView to ensure proper rendering
+            }
+        }
+
+        function viewDeliveryMap(index) {
+            appState.selectedDelivery = appState.deliveries[index];
+            setView('map');
+        }
+
+        function openGoogleMaps() {
+            if (!appState.selectedDelivery) return;
+            const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(appState.selectedDelivery.pickupLocation)}&destination=${encodeURIComponent(appState.selectedDelivery.deliveryLocation)}`;
+            window.open(url, '_blank');
+        }
+
+        // Map Drawing with Google Maps
+        let map = null;
+        let routePolyline = null;
+        let pickupMarker = null;
+        let deliveryMarker = null;
+
+        async function drawMap() {
+            const mapContainer = document.getElementById('map-container');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (!mapContainer || !appState.selectedDelivery) {
+                console.log('Map container or delivery not available', { mapContainer: !!mapContainer, delivery: !!appState.selectedDelivery });
+                return;
+            }
+
+            // Check if Google Maps API is loaded
+            if (typeof google === 'undefined' || !google.maps) {
+                console.error('Google Maps API not loaded');
+                if (loadingOverlay) {
+                    loadingOverlay.innerHTML = '<p class="text-red-500">Google Maps API not loaded. Please refresh the page.</p>';
+                }
+                return;
+            }
+
+            const delivery = appState.selectedDelivery;
+            
+            // Initialize Google Map if it doesn't exist or if container changed
+            if (!map || map.getDiv() !== mapContainer) {
+                try {
+                    map = new google.maps.Map(mapContainer, {
+                        zoom: 8,
+                        center: { lat: 39.8283, lng: -98.5795 }, // Center of USA
+                        mapTypeId: 'roadmap',
+                        styles: [
+                            {
+                                featureType: 'poi',
+                                elementType: 'labels',
+                                stylers: [{ visibility: 'on' }]
+                            }
+                        ]
+                    });
+                } catch (error) {
+                    console.error('Error initializing map:', error);
+                    if (loadingOverlay) {
+                        loadingOverlay.innerHTML = '<p class="text-red-500">Error initializing map. Please refresh the page.</p>';
+                    }
+                    return;
+                }
+            } else {
+                // Clear existing route and markers
+                if (routePolyline) routePolyline.setMap(null);
+                if (pickupMarker) pickupMarker.setMap(null);
+                if (deliveryMarker) deliveryMarker.setMap(null);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/shortest-path`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        origin: delivery.pickupLocation,
+                        destination: delivery.deliveryLocation
+                    })
+                });
+
+                if (!response.ok) throw new Error('Route fetch failed');
+                const data = await response.json();
+                const coords = (data.coords || data.shortest_path || []).map(c => ({
+                    lat: Number(c[0]),
+                    lng: Number(c[1])
+                }));
+
+                if (loadingOverlay) loadingOverlay.style.display = 'none';
+
+                if (coords && coords.length > 0) {
+                    // Create polyline for the route
+                    routePolyline = new google.maps.Polyline({
+                        path: coords,
+                        geodesic: true,
+                        strokeColor: '#2563eb',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 5
+                    });
+                    routePolyline.setMap(map);
+
+                    // Create custom marker icons
+                    const pickupIcon = {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 10,
+                        fillColor: '#22c55e',
+                        fillOpacity: 1,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 3
+                    };
+
+                    const deliveryIcon = {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 10,
+                        fillColor: '#ef4444',
+                        fillOpacity: 1,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 3
+                    };
+
+                    // Add pickup marker with label
+                    pickupMarker = new google.maps.Marker({
+                        position: coords[0],
+                        map: map,
+                        icon: pickupIcon,
+                        label: {
+                            text: 'P',
+                            color: '#ffffff',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                        },
+                        title: 'PICKUP: ' + delivery.pickupLocation
+                    });
+
+                    // Add info window for pickup
+                    const pickupInfoWindow = new google.maps.InfoWindow({
+                        content: `<div style="padding: 8px;"><strong style="color: #22c55e;">PICKUP</strong><br>${delivery.pickupLocation}</div>`
+                    });
+                    pickupMarker.addListener('click', () => {
+                        pickupInfoWindow.open(map, pickupMarker);
+                    });
+                    pickupInfoWindow.open(map, pickupMarker);
+
+                    // Add delivery marker with label
+                    deliveryMarker = new google.maps.Marker({
+                        position: coords[coords.length - 1],
+                        map: map,
+                        icon: deliveryIcon,
+                        label: {
+                            text: 'D',
+                            color: '#ffffff',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                        },
+                        title: 'DELIVERY: ' + delivery.deliveryLocation
+                    });
+
+                    // Add info window for delivery
+                    const deliveryInfoWindow = new google.maps.InfoWindow({
+                        content: `<div style="padding: 8px;"><strong style="color: #ef4444;">DELIVERY</strong><br>${delivery.deliveryLocation}</div>`
+                    });
+                    deliveryMarker.addListener('click', () => {
+                        deliveryInfoWindow.open(map, deliveryMarker);
+                    });
+
+                    // Fit map to show entire route
+                    const bounds = new google.maps.LatLngBounds();
+                    coords.forEach(coord => bounds.extend(coord));
+                    map.fitBounds(bounds, { padding: 50 });
+                } else {
+                    // Fallback: Use Directions Service to show route
+                    const directionsService = new google.maps.DirectionsService();
+                    const directionsRenderer = new google.maps.DirectionsRenderer({
+                        map: map,
+                        polylineOptions: {
+                            strokeColor: '#2563eb',
+                            strokeWeight: 5,
+                            strokeOpacity: 0.8
+                        }
+                    });
+
+                    directionsService.route({
+                        origin: delivery.pickupLocation,
+                        destination: delivery.deliveryLocation,
+                        travelMode: 'DRIVING'
+                    }, (result, status) => {
+                        if (status === 'OK') {
+                            directionsRenderer.setDirections(result);
+                            if (loadingOverlay) loadingOverlay.style.display = 'none';
+                        } else {
+                            if (loadingOverlay) {
+                                loadingOverlay.innerHTML = '<p class="text-yellow-600">Route coordinates not available. Showing locations only.</p>';
+                            }
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to fetch route', err);
+                if (loadingOverlay) {
+                    loadingOverlay.innerHTML = '<p class="text-red-500">Failed to load route. Check backend connection.</p>';
+                }
+            }
+        }
+
+        // Override setView to handle map rendering
+        const originalSetView = setView;
+        setView = function(view) {
+            appState.currentView = view;
+            render();
+            if (view === 'map' && appState.selectedDelivery) {
+                // Clear existing map elements if switching deliveries
+                if (map) {
+                    if (routePolyline) routePolyline.setMap(null);
+                    if (pickupMarker) pickupMarker.setMap(null);
+                    if (deliveryMarker) deliveryMarker.setMap(null);
+                }
+                // Wait for DOM to update, then draw map
+                // Use a longer delay to ensure Google Maps API is ready
+                setTimeout(() => {
+                    const mapContainer = document.getElementById('map-container');
+                    if (mapContainer) {
+                        drawMap();
+                    } else {
+                        console.error('Map container not found in DOM');
+                        // Retry after another delay
+                        setTimeout(() => drawMap(), 500);
+                    }
+                }, 500);
+            }
+        };
+
+        // Initialize
+        render();
+    </script>
+</body>
+</html>
